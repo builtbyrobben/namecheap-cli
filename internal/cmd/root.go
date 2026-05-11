@@ -34,6 +34,8 @@ type CLI struct {
 	VersionCmd VersionCmd       `cmd:"" name:"version" help:"Print version"`
 }
 
+const trueString = "true"
+
 type exitPanic struct{ code int }
 
 func Execute(args []string) (err error) {
@@ -112,7 +114,7 @@ func envOr(key, fallback string) string {
 
 func boolString(v bool) string {
 	if v {
-		return "true"
+		return trueString
 	}
 	return "false"
 }

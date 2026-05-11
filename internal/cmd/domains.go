@@ -102,7 +102,7 @@ func (cmd *DomainsCheckCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	for _, d := range resp.CommandResponse.DomainChecks {
 		status := "unavailable"
-		if d.Available == "true" {
+		if d.Available == trueString {
 			status = "available"
 		}
 
