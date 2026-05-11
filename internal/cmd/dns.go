@@ -5,15 +5,60 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/builtbyrobben/namecheap-cli/internal/namecheap"
 	"github.com/builtbyrobben/namecheap-cli/internal/outfmt"
 )
 
 type DNSCmd struct {
-	List      DNSListCmd      `cmd:"" help:"List DNS records for a domain"`
-	Set       DNSSetCmd       `cmd:"" help:"Set DNS records for a domain"`
-	SetCustom DNSSetCustomCmd `cmd:"set-custom" help:"Set custom nameservers for a domain"`
+	List        DNSListCmd        `cmd:"" help:"List DNS records for a domain"`
+	Set         DNSSetCmd         `cmd:"" help:"Set DNS records for a domain"`
+	Nameservers DNSNameserversCmd `cmd:"" help:"Get or set domain nameservers"`
+	SetCustom   DNSSetCustomCmd   `cmd:"set-custom" help:"Set custom nameservers for a domain"`
+}
+
+type DNSNameserversCmd struct {
+	Get DNSNameserversGetCmd `cmd:"" help:"Get nameservers for a domain"`
+	Set DNSSetCustomCmd      `cmd:"" help:"Set custom nameservers for a domain"`
+}
+
+type DNSNameserversGetCmd struct {
+	SLD string `arg:"" required:"" help:"Second-level domain (e.g., example)"`
+	TLD string `arg:"" required:"" help:"Top-level domain (e.g., com)"`
+}
+
+func (cmd *DNSNameserversGetCmd) Run(ctx context.Context, flags *RootFlags) error {
+	client, err := getNamecheapClient(flags.Sandbox)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.DNSGetList(ctx, cmd.SLD, cmd.TLD)
+	if err != nil {
+		return err
+	}
+
+	result := resp.CommandResponse.DNSNameservers
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, result)
+	}
+
+	if outfmt.IsPlain(ctx) {
+		headers := []string{"DOMAIN", "IS_USING_OUR_DNS", "NAMESERVERS"}
+		rows := [][]string{{result.Domain, result.IsUsingOurDNS, strings.Join(result.Nameservers, ",")}}
+
+		return outfmt.WritePlain(os.Stdout, headers, rows)
+	}
+
+	fmt.Fprintf(os.Stderr, "Nameservers for %s.%s\n\n", cmd.SLD, cmd.TLD)
+	fmt.Printf("Using Namecheap DNS: %s\n", result.IsUsingOurDNS)
+	for _, ns := range result.Nameservers {
+		fmt.Printf("%s\n", ns)
+	}
+
+	return nil
 }
 
 type DNSListCmd struct {
@@ -103,7 +148,7 @@ func (cmd *DNSSetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return outfmt.WritePlain(os.Stdout, headers, rows)
 	}
 
-	if result.IsSuccess == "true" {
+	if result.IsSuccess == trueString {
 		fmt.Fprintf(os.Stderr, "DNS records updated for %s.%s\n", cmd.SLD, cmd.TLD)
 	} else {
 		fmt.Fprintf(os.Stderr, "Failed to update DNS records for %s.%s\n", cmd.SLD, cmd.TLD)
@@ -119,6 +164,10 @@ type DNSSetCustomCmd struct {
 }
 
 func (cmd *DNSSetCustomCmd) Run(ctx context.Context, flags *RootFlags) error {
+	if !flags.Force {
+		return fmt.Errorf("refusing to change nameservers without --force")
+	}
+
 	client, err := getNamecheapClient(flags.Sandbox)
 	if err != nil {
 		return err
@@ -142,7 +191,7 @@ func (cmd *DNSSetCustomCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return outfmt.WritePlain(os.Stdout, headers, rows)
 	}
 
-	if result.Updated == "true" {
+	if result.Updated == trueString {
 		fmt.Fprintf(os.Stderr, "Custom nameservers set for %s.%s\n", cmd.SLD, cmd.TLD)
 	} else {
 		return fmt.Errorf("failed to set custom nameservers for %s.%s", cmd.SLD, cmd.TLD)

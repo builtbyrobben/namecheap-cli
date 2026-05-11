@@ -18,12 +18,12 @@ const (
 )
 
 var (
-	errMissingAPIKey    = errors.New("missing API key")
-	errMissingUser      = errors.New("missing API user")
-	errMissingIP        = errors.New("missing client IP")
-	errDomainRequired   = errors.New("domain name is required")
-	errSLDRequired      = errors.New("SLD is required")
-	errTLDRequired      = errors.New("TLD is required")
+	errMissingAPIKey       = errors.New("missing API key")
+	errMissingUser         = errors.New("missing API user")
+	errMissingIP           = errors.New("missing client IP")
+	errDomainRequired      = errors.New("domain name is required")
+	errSLDRequired         = errors.New("SLD is required")
+	errTLDRequired         = errors.New("TLD is required")
 	errNameserversRequired = errors.New("nameservers are required")
 	errAPIUnknownStatus    = errors.New("API error: unknown status")
 	errAPIResponse         = errors.New("API error")
@@ -178,6 +178,22 @@ func (c *Client) DomainsGetInfo(ctx context.Context, domain string) (*ApiRespons
 }
 
 // --- DNS operations ---
+
+// DNSGetList returns the nameservers associated with a domain.
+func (c *Client) DNSGetList(ctx context.Context, sld, tld string) (*ApiResponse, error) {
+	if sld == "" {
+		return nil, errSLDRequired
+	}
+
+	if tld == "" {
+		return nil, errTLDRequired
+	}
+
+	return c.do(ctx, "namecheap.domains.dns.getList", map[string]string{
+		"SLD": sld,
+		"TLD": tld,
+	})
+}
 
 // DNSGetHosts returns DNS host records for a domain.
 func (c *Client) DNSGetHosts(ctx context.Context, sld, tld string) (*ApiResponse, error) {

@@ -78,14 +78,23 @@ namecheap-cli domains check "example.com,example.net"
 namecheap-cli domains get example.com
 ```
 
-### dns -- DNS record management
+### dns -- DNS and nameserver management
 
 ```bash
-# List DNS records for a domain
+# List DNS records for a domain using Namecheap BasicDNS/PremiumDNS
 namecheap-cli dns list example com
 
-# Set DNS records (replaces all records)
+# Set DNS records (replaces all records; requires Namecheap DNS)
 namecheap-cli dns set example com --records '[{"host_name":"@","record_type":"A","address":"1.2.3.4","ttl":"1800"}]'
+
+# Get the authoritative nameservers for a domain
+namecheap-cli dns nameservers get example com
+
+# Set custom nameservers at the registrar
+namecheap-cli dns nameservers set example com --nameservers ns1.example.com,ns2.example.com --force
+
+# Backward-compatible alias for setting custom nameservers
+namecheap-cli dns set-custom example com --nameservers ns1.example.com,ns2.example.com --force
 ```
 
 ### ssl -- SSL certificate management

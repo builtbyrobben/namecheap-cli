@@ -160,6 +160,45 @@ func TestParseDomainInfoResponse(t *testing.T) {
 	}
 }
 
+func TestParseDNSGetListResponse(t *testing.T) {
+	t.Parallel()
+
+	xmlData := `<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <Errors/>
+  <Warnings/>
+  <RequestedCommand>namecheap.domains.dns.getList</RequestedCommand>
+  <CommandResponse Type="namecheap.domains.dns.getList">
+    <DomainDNSGetListResult Domain="example.com" IsUsingOurDNS="false">
+      <Nameserver>ns1.example.com</Nameserver>
+      <Nameserver>ns2.example.com</Nameserver>
+    </DomainDNSGetListResult>
+  </CommandResponse>
+</ApiResponse>`
+
+	var resp ApiResponse
+	if err := xml.Unmarshal([]byte(xmlData), &resp); err != nil {
+		t.Fatalf("unmarshal XML: %v", err)
+	}
+
+	result := resp.CommandResponse.DNSNameservers
+	if result.Domain != "example.com" {
+		t.Errorf("Domain = %q, want example.com", result.Domain)
+	}
+
+	if result.IsUsingOurDNS != "false" {
+		t.Errorf("IsUsingOurDNS = %q, want false", result.IsUsingOurDNS)
+	}
+
+	if len(result.Nameservers) != 2 {
+		t.Fatalf("got %d nameservers, want 2", len(result.Nameservers))
+	}
+
+	if result.Nameservers[1] != "ns2.example.com" {
+		t.Errorf("nameserver[1] = %q, want ns2.example.com", result.Nameservers[1])
+	}
+}
+
 func TestParseDNSHostsResponse(t *testing.T) {
 	t.Parallel()
 
@@ -448,6 +487,22 @@ func TestDNSGetHostsValidation(t *testing.T) {
 	}
 }
 
+func TestDNSGetListValidation(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient("key", "user", "1.2.3.4", false)
+
+	_, err := client.DNSGetList(context.Background(), "", "com")
+	if !errors.Is(err, errSLDRequired) {
+		t.Errorf("error = %v, want %v", err, errSLDRequired)
+	}
+
+	_, err = client.DNSGetList(context.Background(), "example", "")
+	if !errors.Is(err, errTLDRequired) {
+		t.Errorf("error = %v, want %v", err, errTLDRequired)
+	}
+}
+
 func TestSandboxURL(t *testing.T) {
 	t.Parallel()
 
@@ -507,6 +562,54 @@ func TestDomainsGetListHTTP(t *testing.T) {
 
 	if domains[0].Name != "test.com" {
 		t.Errorf("domain name = %q, want test.com", domains[0].Name)
+	}
+}
+
+func TestDNSGetListHTTP(t *testing.T) {
+	t.Parallel()
+
+	xmlResp := `<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <Errors/>
+  <Warnings/>
+  <RequestedCommand>namecheap.domains.dns.getList</RequestedCommand>
+  <CommandResponse Type="namecheap.domains.dns.getList">
+    <DomainDNSGetListResult Domain="example.com" IsUsingOurDNS="false">
+      <Nameserver>ns1.example.com</Nameserver>
+      <Nameserver>ns2.example.com</Nameserver>
+    </DomainDNSGetListResult>
+  </CommandResponse>
+</ApiResponse>`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("Command") != "namecheap.domains.dns.getList" {
+			t.Errorf("command = %q, want namecheap.domains.dns.getList", r.URL.Query().Get("Command"))
+		}
+
+		if r.URL.Query().Get("SLD") != "example" {
+			t.Errorf("SLD = %q, want example", r.URL.Query().Get("SLD"))
+		}
+
+		if r.URL.Query().Get("TLD") != "com" {
+			t.Errorf("TLD = %q, want com", r.URL.Query().Get("TLD"))
+		}
+
+		w.Header().Set("Content-Type", "text/xml")
+		w.Write([]byte(xmlResp))
+	}))
+	defer srv.Close()
+
+	client := NewClient("testkey", "testuser", "127.0.0.1", false)
+	client.baseURL = srv.URL
+
+	resp, err := client.DNSGetList(context.Background(), "example", "com")
+	if err != nil {
+		t.Fatalf("DNSGetList: %v", err)
+	}
+
+	nameservers := resp.CommandResponse.DNSNameservers.Nameservers
+	if len(nameservers) != 2 {
+		t.Fatalf("got %d nameservers, want 2", len(nameservers))
 	}
 }
 
